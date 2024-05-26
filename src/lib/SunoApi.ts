@@ -63,7 +63,7 @@ class SunoApi {
    */
   private async getAuthToken() {
     // URL to get session ID
-    const getSessionUrl = `${SunoApi.CLERK_BASE_URL}/v1/client?_clerk_js_version=4.72.1`;
+    const getSessionUrl = `${SunoApi.CLERK_BASE_URL}/v1/client?_clerk_js_version=4.72.4`;
     // Get session ID
     const sessionResponse = await this.client.get(getSessionUrl);
     if (!sessionResponse?.data?.response?.['last_active_session_id']) {
@@ -82,7 +82,7 @@ class SunoApi {
       throw new Error("Session ID is not set. Cannot renew token.");
     }
     // URL to renew session token
-    const renewUrl = `${SunoApi.CLERK_BASE_URL}/v1/client/sessions/${this.sid}/tokens?_clerk_js_version=4.72.0-snapshot.vc141245`;
+    const renewUrl = `${SunoApi.CLERK_BASE_URL}/v1/client/sessions/${this.sid}/tokens?_clerk_js_version==4.72.4`;
     // Renew session token
     const renewResponse = await this.client.post(renewUrl);
     logger.info("KeepAlive...\n");
@@ -114,6 +114,29 @@ class SunoApi {
     logger.info("Generate Response:\n" + JSON.stringify(audios, null, 2));
     logger.info("Cost time: " + costTime);
     return audios;
+  }
+
+  /**
+   * Calls the concatenate endpoint for a clip to generate the whole song.
+   * @param clip_id The ID of the audio clip to concatenate.
+   * @returns A promise that resolves to an AudioInfo object representing the concatenated audio.
+   * @throws Error if the response status is not 200.
+   */
+  public async concatenate(clip_id: string): Promise<AudioInfo> {
+    await this.keepAlive(false);
+    const payload: any = { clip_id: clip_id };
+
+    const response = await this.client.post(
+      `${SunoApi.BASE_URL}/api/generate/concat/v2/`,
+      payload,
+      {
+        timeout: 10000, // 10 seconds timeout
+      },
+    );
+    if (response.status !== 200) {
+      throw new Error("Error response:" + response.statusText);
+    }
+    return response.data;
   }
 
   /**
@@ -256,6 +279,34 @@ class SunoApi {
   }
 
   /**
+   * Extends an existing audio clip by generating additional content based on the provided prompt.
+   * 
+   * @param audioId The ID of the audio clip to extend.
+   * @param prompt The prompt for generating additional content.
+   * @param continueAt Extend a new clip from a song at mm:ss(e.g. 00:30). Default extends from the end of the song.
+   * @param tags Style of Music.
+   * @param title Title of the song.
+   * @returns A promise that resolves to an AudioInfo object representing the extended audio clip.
+   */
+  public async extendAudio(
+    audioId: string,
+    prompt: string = "",
+    continueAt: string = "0",
+    tags: string = "",
+    title: string = ""
+  ): Promise<AudioInfo> {
+    const response = await this.client.post(`${SunoApi.BASE_URL}/api/generate/v2/`, {
+      continue_clip_id: audioId,
+      continue_at: continueAt,
+      mv: "chirp-v3-0",
+      prompt: prompt,
+      tags: tags,
+      title: ""
+    });
+    return response.data;
+  }
+
+  /**
    * Processes the lyrics (prompt) from the audio metadata into a more readable format.
    * @param prompt The original lyrics text.
    * @returns The processed lyrics text.
@@ -310,6 +361,17 @@ class SunoApi {
     }));
   }
 
+  /**
+   * Retrieves information for a specific audio clip.
+   * @param clipId The ID of the audio clip to retrieve information for.
+   * @returns A promise that resolves to an object containing the audio clip information.
+   */
+  public async getClip(clipId: string): Promise<object> {
+    await this.keepAlive(false);
+    const response = await this.client.get(`${SunoApi.BASE_URL}/api/clip/${clipId}`);
+    return response.data;
+  }
+
   public async get_credits(): Promise<object> {
     await this.keepAlive(false);
     const response = await this.client.get(`${SunoApi.BASE_URL}/api/billing/info/`);
@@ -325,6 +387,10 @@ class SunoApi {
 const newSunoApi = async (cookie: string) => {
   const sunoApi = new SunoApi(cookie);
   return await sunoApi.init();
+}
+
+if (!process.env.SUNO_COOKIE) {
+  console.log("Environment does not contain SUNO_COOKIE.", process.env)
 }
 
 export const sunoApi = newSunoApi(process.env.SUNO_COOKIE || '');

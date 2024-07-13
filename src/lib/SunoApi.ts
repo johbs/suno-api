@@ -298,7 +298,7 @@ class SunoApi {
     const response = await this.client.post(`${SunoApi.BASE_URL}/api/generate/v2/`, {
       continue_clip_id: audioId,
       continue_at: continueAt,
-      mv: "chirp-v3-0",
+      mv: "chirp-v3-5",
       prompt: prompt,
       tags: tags,
       title: ""

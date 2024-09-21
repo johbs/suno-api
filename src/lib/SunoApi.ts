@@ -186,7 +186,7 @@ class SunoApi {
     await this.keepAlive(false);
     const payload: any = {
       make_instrumental: make_instrumental == true,
-      mv: "chirp-v3-5",
+      mv: "chirp-v3-5-tau",
       prompt: "",
     };
     if (isCustom) {
@@ -298,7 +298,7 @@ class SunoApi {
     const response = await this.client.post(`${SunoApi.BASE_URL}/api/generate/v2/`, {
       continue_clip_id: audioId,
       continue_at: continueAt,
-      mv: "chirp-v3-5",
+      mv: "chirp-v3-5-tau",
       prompt: prompt,
       tags: tags,
       title: "",

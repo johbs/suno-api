@@ -309,6 +309,35 @@ class SunoApi {
     return response.data;
   }
 
+    /**
+   * Cover an existing audio clip by generating content based on the same melody.
+   * 
+   * @param audioId The ID of the audio clip to extend.
+   * @param prompt The prompt for generating additional content.
+   * @param tags Style of Music.
+   * @param title Title of the song.
+   * @returns A promise that resolves to an AudioInfo object representing the extended audio clip.
+   */
+  
+  public async coverAudio(
+    audioId: string,
+    prompt: string = "",
+    tags: string = "",
+    title: string = ""
+  ): Promise<AudioInfo> {
+    const response = await this.client.post(`${SunoApi.BASE_URL}/api/generate/v2/`, {
+      cover_clip_id: audioId,
+      mv: "chirp-v3-5-tau",
+      prompt: prompt,
+      tags: tags,
+      title: "",
+      task: "cover",
+      negative_tags: "",
+      generation_type: "TEXT"
+    });
+    return response.data;
+  }
+
   /**
    * Processes the lyrics (prompt) from the audio metadata into a more readable format.
    * @param prompt The original lyrics text.

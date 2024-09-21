@@ -301,7 +301,10 @@ class SunoApi {
       mv: "chirp-v3-5",
       prompt: prompt,
       tags: tags,
-      title: ""
+      title: "",
+      task: "extend",
+      negative_tags: "",
+      generation_type = "TEXT"
     });
     return response.data;
   }

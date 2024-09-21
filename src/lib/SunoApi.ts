@@ -304,7 +304,7 @@ class SunoApi {
       title: "",
       task: "extend",
       negative_tags: "",
-      generation_type = "TEXT"
+      generation_type: "TEXT"
     });
     return response.data;
   }

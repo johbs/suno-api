@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   if (req.method === 'POST') {
     try {
       const check = await (await sunoApi).check();
-      return new NextResponse(JSON.stringify(check), {
+      return new NextResponse(JSON.stringify({ required: check}), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',

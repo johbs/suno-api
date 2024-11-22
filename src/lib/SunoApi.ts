@@ -6,7 +6,7 @@ import { CookieJar } from 'tough-cookie';
 import { sleep } from '@/lib/utils';
 
 const logger = pino();
-export const DEFAULT_MODEL = 'chirp-v3-5';
+export const DEFAULT_MODEL = 'chirp-v4';
 
 export interface AudioInfo {
   id: string; // Unique identifier for the audio

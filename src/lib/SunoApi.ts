@@ -144,7 +144,7 @@ class SunoApi {
                 resolve(getResult(left - 1))
               }, 3000)
             } else {
-              logger.info('Captcha not found!', res.data.request, r2.data)
+              logger.info('Captcha not found!', r2.data.request, r2.data)
               resolve(null)
             }
           } catch (error) {

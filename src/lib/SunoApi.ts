@@ -104,22 +104,57 @@ class SunoApi {
    * Keep the session alive.
    * @param isWait Indicates if the method should wait for the session to be fully renewed before returning.
    */
-  public async keepAlive(isWait?: boolean): Promise<void> {
-    if (!this.sid) {
-      throw new Error('Session ID is not set. Cannot renew token.');
-    }
-    // URL to renew session token
-    const renewUrl = `${SunoApi.CLERK_BASE_URL}/v1/client/sessions/${this.sid}/tokens?_clerk_js_version==${this.clerkVersion}`;
-    // Renew session token
-    const renewResponse = await this.client.post(renewUrl);
-    logger.info('KeepAlive...\n');
-    if (isWait) {
-      await sleep(1, 2);
-    }
-    const newToken = renewResponse.data['jwt'];
-    // Update Authorization field in request header with the new JWT token
-    this.currentToken = newToken;
-  }
+ public async keepAlive(isWait?: boolean, captcha_token?: string) {
+   if (!this.sid) {
+     throw new Error('Session ID is not set. Cannot renew token.')
+   }
+   if (this.currentToken) {
+     if (this.currentToken.exp > dayjs()) {
+       return null
+     }
+   }
+   // URL to renew session token
+   const renewUrl = `${SunoApi.CLERK_BASE_URL}/v1/client/sessions/${this.sid}/tokens?__clerk_api_version=${clerkApiVersion}&_clerk_js_version=${clerkJsVersion}`
+   // Renew session token
+
+   const form: Record<string, string> = {
+     organization_id: '',
+   }
+   if (captcha_token) {
+     form.captcha_token = captcha_token
+     form.captcha_widget_type = 'smart'
+   }
+   try {
+     logger.info('KeepAlive...\n')
+     const renewResponse = await this.client.post(renewUrl, form, {
+       headers: {
+         'Content-Type': 'application/x-www-form-urlencoded',
+         Priority: 'u=1, i',
+         Referer: 'https://suno.com/',
+       },
+     })
+     if (isWait) {
+       await sleep(1, 2)
+     }
+     // Update Authorization field in request header with the new JWT token
+     this.currentToken = {
+       token: renewResponse.data.jwt,
+       exp: dayjs().add(30, 'second'),
+     }
+   } catch (error) {
+     const code = String(error?.response?.data?.errors?.[0]?.code || 'Unknown error')
+     if (code === 'requires_captcha' && !captcha_token) {
+       //
+       const captcha_token = await this.getCaptchaToken()
+
+       if (captcha_token) {
+         return this.keepAlive(isWait, captcha_token)
+       }
+     }
+     throw new Error(`Cannot get token ${code}`)
+   }
+   return captcha_token
+ }
 
   /**
    * Generate a song based on the prompt.
@@ -447,6 +482,109 @@ class SunoApi {
     return lines.join('\n');
   }
 
+private currentToken?: {
+  token: string
+  exp: Dayjs
+}
+
+  /**
+   * check if hCaptha should be checked
+   */
+  private async check() {
+    const res = await this.client.post<{ required: boolean }>(
+      `${SunoApi.BASE_URL}/api/c/check`,
+      {
+        ctype: 'generation',
+      },
+    )
+    if (res.data.required) {
+      logger.info('hCaptcha required')
+    }
+    return res.data.required
+  }
+
+  const isTokenNeeded = await this.check()
+    if (isTokenNeeded) {
+      // payload.token = await this.hCaptchaToken()
+      // TODO: we should solve hCaptcha
+    }
+
+  const token = await this.keepAlive(false)
+    const payload: any = {
+      make_instrumental: make_instrumental == true,
+      mv: model || DEFAULT_MODEL,
+      prompt: '',
+      generation_type: 'TEXT',
+      ...(await this.getMetadata()),
+      token: token || null,
+    }
+  
+private async getCaptchaToken() {
+    try {
+      logger.info('Finding captcha...')
+      const key = 'API_KEY'
+      const r1 = await axios.post<{
+        request: string
+      }>(
+        'https://2captcha.com/in.php',
+        {
+          key,
+          method: 'turnstile',
+          sitekey: '0x4AAAAAAAWXJGBD7bONzLBd',
+          pageurl: 'https://suno.com',
+          json: 1,
+        },
+        {
+          responseType: 'json',
+        },
+      )
+      if (!r1.data.request) {
+        throw new Error(`Failed to create captcha request ${r1.data.request}`)
+      }
+      const getResult = async (left = 30) => {
+        // eslint-disable-next-line no-async-promise-executor
+        return new Promise<null | string>(async (resolve) => {
+          try {
+            const r2 = await axios.get<{ request: string; }>(
+              `https://2captcha.com/res.php?key=${key}&action=get&id=${r1.data.request}&json=1`,
+              {
+                responseType: 'json',
+              },
+            )
+
+            if (r2.data.request.length > 100) {
+              logger.info('Captcha found!')
+              resolve(r2.data.request)
+              return
+            }
+            if (left && r2.data.request === 'CAPCHA_NOT_READY') {
+              logger.info('Captcha awaiting, request', r1.data.request)
+              setTimeout(() => {
+                resolve(getResult(left - 1))
+              }, 3000)
+            } else {
+              logger.info('Captcha not found!', res.data.request, r2.data)
+              resolve(null)
+            }
+          } catch (error) {
+            if (left) {
+              setTimeout(() => {
+                resolve(getResult(left - 1))
+              }, 3000)
+            } else {
+              logger.info('Captcha not found!', 'timeout 90s', r1.data.request)
+              resolve(null)
+            }
+          }
+        })
+      }
+      return await getResult()
+    } catch (error) {
+      console.error(error)
+      return null
+    }
+  }
+
   /**
    * Retrieves audio information for the given song IDs.
    * @param songIds An optional array of song IDs to retrieve information for.
@@ -520,6 +658,17 @@ class SunoApi {
     };
   }
 }
+
+this.client.interceptors.request.use((config) => {
+    if (this.currentToken) {
+      // Use the current token status
+      config.headers.Authorization = `Bearer ${this.currentToken.token}`
+    }
+    return config
+  })
+
+
+
 
 const newSunoApi = async (cookie: string) => {
   const sunoApi = new SunoApi(cookie);
